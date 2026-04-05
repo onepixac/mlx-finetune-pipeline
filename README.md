@@ -352,9 +352,10 @@ Each stage builds on the previous one. You can skip CPT if your domain is alread
 ```bibtex
 @article{pappone2025grpo,
   title={Shaping Explanations: Semantic Reward Modeling with Encoder-Only Transformers for GRPO},
-  author={Pappone, Lazzaroni, Califano, Gentile, Marras},
+  author={Pappone, Andrea and Lazzaroni, Luca and Califano, Andrea and Gentile, Antonio and Marras, Roberto},
   journal={arXiv preprint arXiv:2509.13081},
-  year={2025}
+  year={2025},
+  note={Commissioned by Onepix Academy SRL}
 }
 ```
 
@@ -364,5 +365,5 @@ Apache 2.0
 
 ## Authors
 
-- [onepixac](https://github.com/onepixac) — Architecture, implementation, and testing
+- [Roberto Marras](https://github.com/onepixac) — Co-author of arXiv:2509.13081, CTO at Onepix Academy SRL. Architecture, implementation, and testing.
 - [Claude Opus 4.6](https://anthropic.com) — Co-development and documentation
