@@ -1,0 +1,21 @@
+# Stage 1: Continued Pre-Training (CPT)
+# Purpose: Familiarize the model with domain-specific text
+# Data format: {"text": "raw text..."}
+model: models/your-base-model
+data: data/cpt
+adapter_path: adapters/stage1-cpt
+train: true
+fine_tune_type: lora
+mask_prompt: false
+
+num_layers: 16
+iters: 3000
+batch_size: 1
+learning_rate: 5e-6
+steps_per_report: 100
+steps_per_eval: 500
+val_batches: 10
+save_every: 500
+max_seq_length: 1024
+grad_checkpoint: true
+seed: 42

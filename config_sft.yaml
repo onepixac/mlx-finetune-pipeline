@@ -1,0 +1,22 @@
+# Stage 2: Supervised Fine-Tuning (SFT)
+# Purpose: Teach the model to follow instructions
+# Data format: {"messages": [{"role": "system", ...}, {"role": "user", ...}, {"role": "assistant", ...}]}
+model: models/your-base-model
+data: data/sft
+adapter_path: adapters/stage2-sft
+resume_adapter_file: adapters/stage1-cpt/best_checkpoint.safetensors
+train: true
+fine_tune_type: lora
+mask_prompt: true
+
+num_layers: 16
+iters: 170000              # Adjust: dataset_size * num_epochs
+batch_size: 1
+learning_rate: 1e-5
+steps_per_report: 500
+steps_per_eval: 10000
+val_batches: 25
+save_every: 5000
+max_seq_length: 512
+grad_checkpoint: true
+seed: 42
