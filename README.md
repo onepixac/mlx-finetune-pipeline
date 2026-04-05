@@ -57,16 +57,16 @@ Where to find MLX models: **[mlx-community](https://huggingface.co/mlx-community
 
 Browse all available MLX models at **[mlx-community on HuggingFace](https://huggingface.co/mlx-community)**. Filter by size based on your Mac's RAM:
 
-| Your Mac RAM | Max model size (4-bit) | Example size range |
+| Your Mac RAM | Max 4-bit model size | Example models |
 |---|---|---|
-| 16 GB | ~3 GB | 1B-4B models |
-| 24 GB | ~8 GB | 4B-9B models |
-| 32 GB | ~16 GB | 9B-26B models |
-| 48 GB | ~25 GB | Up to 32B models |
-| 64 GB | ~40 GB | Up to 70B models |
+| 16 GB | ~5 GB | Up to 4B |
+| 24 GB | ~12 GB | Up to 9B |
+| 32 GB | ~18 GB | Up to 26B (MoE with 4B active) |
+| 48 GB | ~30 GB | Up to 32B |
+| 64 GB | ~40 GB | Up to 32B comfortably, 70B tight |
 | 128-192 GB | ~100+ GB | Any model |
 
-**Rule of thumb:** Model size (4-bit) + 8 GB for training overhead = minimum RAM you need.
+**Rule of thumb:** Model size (4-bit) + 10-15 GB for LoRA training overhead = minimum RAM you need. Training overhead depends on `max_seq_length`, `batch_size`, and number of LoRA layers.
 
 **MoE (Mixture of Experts) models:** Some models have more total parameters but fewer "active" parameters per token. For example, a 26B model with 4B active parameters gives high quality with lower computation cost. Look for names containing "A4B", "A3B", etc.
 
@@ -78,15 +78,16 @@ Browse all available MLX models at **[mlx-community on HuggingFace](https://hugg
 
 Any Mac with Apple Silicon (M1 or later) works. More RAM = larger models.
 
-| Mac RAM | What you can fine-tune | Training Speed |
+| Mac RAM | What you can fine-tune (4-bit LoRA) | Training Speed |
 |---|---|---|
 | 16 GB | Models up to ~4B | ~0.3 it/sec |
 | 24 GB | Models up to ~9B | ~0.3-0.5 it/sec |
-| 32-48 GB | Models up to ~26B | ~0.4-0.5 it/sec |
-| 64 GB | Models up to ~70B | ~0.5 it/sec |
-| 128-192 GB | Any model | ~0.3-0.5 it/sec |
+| 32 GB | Models up to ~26B (MoE) | ~0.4-0.5 it/sec |
+| 48 GB | Models up to ~32B | ~0.4-0.5 it/sec |
+| 64 GB | Models up to ~32B comfortably | ~0.5 it/sec |
+| 128-192 GB | Models up to ~70B+ | ~0.3-0.5 it/sec |
 
-**Tested on:** Mac Mini M4 Pro with 64 GB unified memory.
+**Tested on:** Mac Mini M4 Pro with 64 GB unified memory, training Gemma 4 26B-A4B (4-bit, 15.6 GB) with LoRA at ~0.5 it/sec using ~22 GB RAM.
 
 ---
 
@@ -104,13 +105,13 @@ source venv/bin/activate
 # 3. Install dependencies
 pip install mlx-lm sentence-transformers
 
-# 4. For Gemma 4 support (required as of April 2026):
+# 4. If your model doesn't load, install mlx-lm from the main branch:
 pip install 'mlx-lm @ git+https://github.com/ml-explore/mlx-lm.git@main'
 
-# 5. Download a model
+# 5. Download a model (replace with your chosen model from mlx-community)
 python -c "
 from huggingface_hub import snapshot_download
-snapshot_download('mlx-community/gemma-4-26b-a4b-it-4bit', local_dir='models/gemma4-26b-4bit')
+snapshot_download('mlx-community/YOUR-MODEL-4bit', local_dir='models/your-base-model')
 "
 ```
 
@@ -339,7 +340,7 @@ In this example, the best model is at iter 2000 even though training continued t
 ## How it works (for the curious)
 
 ### LoRA (Low-Rank Adaptation)
-Instead of updating all 26 billion parameters (which would need terabytes of memory), LoRA adds small trainable matrices to specific layers. Typically only 0.1-4% of parameters are trainable. This is why fine-tuning works on a Mac — you're only training ~100-200 million parameters.
+Instead of updating all of a model's parameters (which would need massive amounts of memory), LoRA adds small trainable matrices to specific layers. Typically only 0.1-4% of parameters are trainable. This is why fine-tuning works on a Mac — you're only training a fraction of the full model.
 
 ### 4-bit Quantization
 Models are stored with 4 bits per parameter instead of 16 or 32. This reduces model size by roughly 4x — for example, a model that would normally need 40 GB fits in ~10 GB. This makes large models fit in Mac RAM. Quality loss is minimal for fine-tuning.
