@@ -350,12 +350,12 @@ Each stage builds on the previous one. You can skip CPT if your domain is alread
 ## Citation
 
 ```bibtex
-@article{pappone2025grpo,
+@article{onepixacademy2025grpo,
   title={Shaping Explanations: Semantic Reward Modeling with Encoder-Only Transformers for GRPO},
-  author={Pappone, Andrea and Lazzaroni, Luca and Califano, Andrea and Gentile, Antonio and Marras, Roberto},
+  author={Pappone, Francesco and Lazzaroni, Ruggero Marino and Califano, Federico and Gentile, Niccolò and Marras, Roberto},
   journal={arXiv preprint arXiv:2509.13081},
   year={2025},
-  note={Commissioned by Onepix Academy SRL}
+  organization={Onepix Academy SRL}
 }
 ```
 
