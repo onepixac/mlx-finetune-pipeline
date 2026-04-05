@@ -342,7 +342,7 @@ In this example, the best model is at iter 2000 even though training continued t
 Instead of updating all 26 billion parameters (which would need terabytes of memory), LoRA adds small trainable matrices to specific layers. Typically only 0.1-4% of parameters are trainable. This is why fine-tuning works on a Mac — you're only training ~100-200 million parameters.
 
 ### 4-bit Quantization
-Models are stored with 4 bits per parameter instead of 16 or 32. This reduces a 26B model from ~52 GB to ~15 GB, making it fit in Mac RAM. Quality loss is minimal for fine-tuning.
+Models are stored with 4 bits per parameter instead of 16 or 32. This reduces model size by roughly 4x — for example, a model that would normally need 40 GB fits in ~10 GB. This makes large models fit in Mac RAM. Quality loss is minimal for fine-tuning.
 
 ### Unified Memory
 On NVIDIA systems, the GPU has its own memory (VRAM). Data must be copied between CPU RAM and GPU VRAM — this is slow and limits model size to VRAM capacity. On Apple Silicon, CPU and GPU share the same memory pool. A 64GB Mac gives the GPU access to all 64GB. No copying, no VRAM limits.
