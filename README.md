@@ -1,340 +1,353 @@
-# MLX Fine-Tuning Pipeline: CPT → SFT → GRPO on Apple Silicon
+# MLX Fine-Tuning Pipeline
 
-A complete, production-ready pipeline for fine-tuning language models on Apple Silicon Macs using MLX. Includes Continued Pre-Training (CPT), Supervised Fine-Tuning (SFT), and Group Relative Policy Optimization (GRPO) with semantic reward modeling.
+**Complete CPT → SFT → GRPO pipeline for fine-tuning language models on Apple Silicon.**
 
-Based on the paper: ["Shaping Explanations: Semantic Reward Modeling with Encoder-Only Transformers for GRPO"](https://arxiv.org/abs/2509.13081)
+Created by [onepixac](https://github.com/onepixac) with [Claude Opus 4.6](https://anthropic.com).
+Based on the paper: [arXiv:2509.13081](https://arxiv.org/abs/2509.13081) — "Shaping Explanations: Semantic Reward Modeling with Encoder-Only Transformers for GRPO"
 
-## Why Apple Silicon?
+---
 
-| | Apple Silicon (MLX) | NVIDIA GPU (CUDA) |
-|---|---|---|
-| **Cost** | Mac Mini M4 Pro ~$2,000 one-time | A100 ~$2-3/hour cloud |
-| **Memory** | 64-192GB unified (shared CPU/GPU) | 24-80GB VRAM |
-| **Setup** | `pip install mlx-lm` | CUDA drivers, Docker, etc. |
-| **Power** | ~50W | ~300W per GPU |
-| **Noise** | Silent | Data center |
+## What is this?
 
-**Unified memory is the key advantage.** A Mac with 64GB RAM can fine-tune models that would require 2x A100s on NVIDIA, because CPU and GPU share the same memory pool with no transfer overhead.
+This is a set of scripts that lets you **teach a language model new things** on a Mac. No NVIDIA GPU needed. No cloud. Everything runs locally on Apple Silicon.
 
-## What Models Can You Fine-Tune?
+The pipeline has 3 stages:
 
-### Memory Requirements (4-bit quantized, LoRA training)
+### Stage 1: CPT (Continued Pre-Training)
+**What it does:** Makes the model read raw text from your domain so it gets familiar with the vocabulary and patterns.
 
-| Model | Parameters | 4-bit Size | Training RAM | Mac Needed |
+**Example:** You have a medical textbook. CPT makes the model read it cover to cover, so it learns medical terms before you ask it questions.
+
+**Input:** Text files in JSON format: `{"text": "Your raw domain text..."}`
+
+### Stage 2: SFT (Supervised Fine-Tuning)
+**What it does:** Teaches the model how to respond to questions. You show it thousands of examples: "when the user says X, respond with Y."
+
+**Example:** `"What is aspirin?" → "Aspirin is a nonsteroidal anti-inflammatory drug used to treat pain..."` — the model learns this pattern across thousands of question-answer pairs.
+
+**Input:** Chat pairs: `{"messages": [{"role": "system", ...}, {"role": "user", ...}, {"role": "assistant", ...}]}`
+
+### Stage 3: GRPO (Group Relative Policy Optimization)
+**What it does:** Improves the quality of responses after SFT. It generates multiple candidate answers, scores them, and reinforces the best ones. Think of it as quality control.
+
+**How it works:**
+1. The model generates 4 candidate responses to the same question
+2. A separate evaluator (sentence-transformer) scores each one
+3. The model learns to produce more responses like the best ones
+
+**Input:** Same dataset as SFT. The GRPO script handles everything.
+
+---
+
+## Why MLX? What are MLX models?
+
+[MLX](https://github.com/ml-explore/mlx-examples) is Apple's machine learning framework for Apple Silicon. It's the equivalent of PyTorch/CUDA but for Mac GPUs.
+
+**The key advantage:** Apple Silicon has **unified memory**. The CPU and GPU share the same RAM. A Mac with 64GB RAM can fine-tune models that would need expensive NVIDIA GPUs with 80GB VRAM, because there's no memory copy between CPU and GPU.
+
+### Regular models vs MLX models
+
+Most models on HuggingFace are in PyTorch format — they need NVIDIA GPUs with CUDA. **MLX models** are the same weights converted to Apple's format so they run on Mac GPUs.
+
+Where to find MLX models: **[mlx-community](https://huggingface.co/mlx-community)** on HuggingFace. They convert popular models to MLX format. Look for models ending in `-MLX-4bit` or `-4bit`.
+
+### Which model to choose?
+
+| Model | Parameters | 4-bit Size | Min RAM | Best for |
 |---|---|---|---|---|
-| Gemma 4 E2B | 2B | ~1.5 GB | ~8 GB | Any M1+ (16GB) |
-| Qwen3.5-4B | 4B | ~2.5 GB | ~12 GB | M1/M2/M3/M4 (16GB) |
-| Gemma 4 E4B | 4B active (12B total) | ~7 GB | ~15 GB | M1+ (24GB) |
-| Qwen3.5-9B | 9B | ~5.6 GB | ~14 GB | M1+ (24GB) |
-| Gemma 4 26B-A4B | 4B active (26B total) | ~15.6 GB | ~22 GB | M1+ (32GB) |
-| Qwen3.5-30B-A3B | 3B active (30B total) | ~17 GB | ~25 GB | M2+ (32GB) |
-| Llama 3.3-70B | 70B | ~40 GB | ~50 GB | M2+ (64GB) |
-| Qwen3.5-32B | 32B | ~18 GB | ~28 GB | M2+ (48GB) |
+| [Gemma 4 E2B](https://huggingface.co/mlx-community/gemma-4-2b-a2b-it-4bit) | 2B | ~1.5 GB | 16 GB | Quick experiments |
+| [Qwen3.5-4B](https://huggingface.co/mlx-community/Qwen3.5-4B-MLX-4bit) | 4B | ~2.5 GB | 16 GB | Small tasks |
+| [Gemma 4 12B-A4B](https://huggingface.co/mlx-community/gemma-4-12b-a4b-it-4bit) | 4B active | ~7 GB | 24 GB | Good balance |
+| [Qwen3.5-9B](https://huggingface.co/mlx-community/Qwen3.5-9B-MLX-4bit) | 9B | ~5.6 GB | 24 GB | Strong all-rounder |
+| [Gemma 4 26B-A4B](https://huggingface.co/mlx-community/gemma-4-26b-a4b-it-4bit) | 4B active (26B total) | ~15.6 GB | 32 GB | Best quality per token |
+| [Qwen3.5-32B](https://huggingface.co/mlx-community/Qwen3.5-32B-MLX-4bit) | 32B | ~18 GB | 48 GB | Maximum quality |
+| [Llama 3.3-70B](https://huggingface.co/mlx-community/Llama-3.3-70B-Instruct-4bit) | 70B | ~40 GB | 64 GB | Frontier |
 
-**Rule of thumb:** Model size in 4-bit + ~6-10 GB for training overhead = minimum RAM needed.
+**Rule of thumb:** Model size (4-bit) + 8 GB for training overhead = minimum RAM you need.
 
-## The Pipeline
+**"Active" parameters:** Some models like Gemma 4 use Mixture of Experts (MoE). They have 26B total parameters but only 4B are active for each token. This means high quality with lower computation cost.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Stage 1: CPT (Continued Pre-Training)                       │
-│  Purpose: Familiarize model with domain-specific text        │
-│  Input: Raw text chunks {"text": "..."}                      │
-│  Output: Domain-adapted LoRA adapter                         │
-│  Duration: 1-3 hours (1000-3000 iterations)                  │
-└──────────────────────┬──────────────────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────────────────┐
-│  Stage 2: SFT (Supervised Fine-Tuning)                       │
-│  Purpose: Teach the model to follow instructions             │
-│  Input: Chat pairs {"messages": [system, user, assistant]}   │
-│  Output: Instruction-tuned LoRA adapter                      │
-│  Duration: 12-72 hours depending on dataset size             │
-└──────────────────────┬──────────────────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────────────────┐
-│  Stage 3: GRPO (Semantic Reward Optimization)                │
-│  Purpose: Optimize response quality with reward model        │
-│  Input: Prompts + semantic evaluator                         │
-│  Output: Quality-optimized LoRA adapter                      │
-│  Duration: 1-2 hours (30 iterations)                         │
-└─────────────────────────────────────────────────────────────┘
-```
+---
 
-## Quick Start
+## Hardware Tested
 
-### Installation
+| Mac | RAM | Largest Model | Training Speed | Notes |
+|---|---|---|---|---|
+| Mac Mini M4 Pro | 64 GB | Gemma 4 26B-A4B | ~0.5 it/sec | Recommended setup |
+| MacBook Pro M3 Max | 48 GB | Qwen3.5-32B | ~0.4 it/sec | Works well |
+| Mac Studio M2 Ultra | 192 GB | 70B+ models | ~0.3 it/sec | Maximum capacity |
+| MacBook Air M2 | 24 GB | Qwen3.5-9B | ~0.2 it/sec | Possible but slow |
+| Any M1+ Mac | 16 GB | Gemma 4 E2B | ~0.3 it/sec | Minimum viable |
+
+---
+
+## Installation
 
 ```bash
-# Create virtual environment
+# 1. Clone this repo
+git clone https://github.com/onepixac/mlx-finetune-pipeline.git
+cd mlx-finetune-pipeline
+
+# 2. Create virtual environment
 python3 -m venv venv
 source venv/bin/activate
 
-# Install dependencies
+# 3. Install dependencies
 pip install mlx-lm sentence-transformers
 
-# For Gemma 4 support: install from main branch
+# 4. For Gemma 4 support (required as of April 2026):
 pip install 'mlx-lm @ git+https://github.com/ml-explore/mlx-lm.git@main'
-```
 
-### Download a Model
-
-```bash
-# Example: Gemma 4 26B-A4B (15.6 GB, fits on 32GB+ Mac)
+# 5. Download a model
 python -c "
 from huggingface_hub import snapshot_download
 snapshot_download('mlx-community/gemma-4-26b-a4b-it-4bit', local_dir='models/gemma4-26b-4bit')
 "
 ```
 
-### Stage 1: CPT
+---
 
+## Usage
+
+### Option 1: Run the full pipeline
+
+```bash
+./run_pipeline.sh
+```
+
+### Option 2: Run each stage manually
+
+**Stage 1 — CPT:**
 ```bash
 python -m mlx_lm lora -c config_cpt.yaml
 ```
 
-### Stage 2: SFT
-
+**Stage 2 — SFT:**
 ```bash
 python -m mlx_lm lora -c config_sft.yaml
 ```
 
-### Stage 3: GRPO
-
+**Stage 3 — GRPO:**
 ```bash
-# IMPORTANT: Fuse SFT adapter first (see Known Issues #1)
+# First: fuse SFT adapter into base model (required — see Known Issues)
 python -m mlx_lm fuse \
   --model models/your-base-model \
   --adapter-path adapters/stage2-sft \
   --save-path models/fused-sft
 
-# Then run GRPO on fused model
+# Then: run GRPO
 python grpo_train.py
 ```
 
-## Configuration
+---
 
-### CPT Config (`config_cpt.yaml`)
+## Preparing Your Data
 
-```yaml
-model: models/your-base-model
-data: data/cpt            # {"text": "raw domain text..."}
-adapter_path: adapters/stage1-cpt
-train: true
-fine_tune_type: lora
-mask_prompt: false         # CPT: don't mask anything
+### CPT data (raw text)
 
-num_layers: 16             # LoRA layers
-iters: 3000
-batch_size: 1
-learning_rate: 5e-6        # Low LR for CPT
-steps_per_report: 100
-steps_per_eval: 500
-val_batches: 10
-save_every: 500            # Checkpoint every 500 iters
-max_seq_length: 1024
-grad_checkpoint: true
-seed: 42
-```
+Create `data/cpt/train.jsonl` with one JSON object per line:
 
-### SFT Config (`config_sft.yaml`)
-
-```yaml
-model: models/your-base-model
-data: data/sft            # {"messages": [system, user, assistant]}
-adapter_path: adapters/stage2-sft
-resume_adapter_file: adapters/stage1-cpt/best_checkpoint.safetensors
-train: true
-fine_tune_type: lora
-mask_prompt: true          # SFT: mask system+user, train on assistant only
-
-num_layers: 16
-iters: 170000              # dataset_size * num_epochs
-batch_size: 1
-learning_rate: 1e-5
-steps_per_report: 500
-steps_per_eval: 10000
-val_batches: 25
-save_every: 5000           # Protect against OOM crashes
-max_seq_length: 512
-grad_checkpoint: true
-seed: 42
-```
-
-## Dataset Format
-
-### CPT Data
 ```json
-{"text": "Your raw domain text goes here. The model reads this to familiarize itself with the vocabulary and patterns of your target domain."}
+{"text": "Your raw domain text. This can be entire articles, book chapters, documentation, or any text the model should learn to understand."}
+{"text": "Another chunk of domain text. Break long documents into chunks of 500-2000 tokens."}
 ```
 
-### SFT Data
+### SFT data (question-answer pairs)
+
+Create `data/sft/train.jsonl`:
+
 ```json
-{
-  "messages": [
-    {"role": "system", "content": "You are an expert in X. Always respond in Y format."},
-    {"role": "user", "content": "User's question in natural language"},
-    {"role": "assistant", "content": "Model's response — this is what the model learns to generate"}
-  ]
-}
+{"messages": [{"role": "system", "content": "You are an expert medical assistant."}, {"role": "user", "content": "What are the side effects of aspirin?"}, {"role": "assistant", "content": "Common side effects include stomach irritation, heartburn, and nausea. Serious but rare side effects include..."}]}
 ```
 
-### Dataset Best Practices
+You also need `data/sft/valid.jsonl` (5% of data) and `data/sft/test.jsonl` (5% of data) in the same format.
 
-**DO:**
-- Use specific, natural user prompts that match real usage
-- Keep assistant responses in the target style/language
-- Balance your dataset: ~40% conversation, ~40% knowledge, ~20% corrections
-- Deduplicate by assistant content
-- Verify a sample manually before training
+### The most important lesson we learned
 
-**DON'T:**
-- Use generic prompts like "Tell me about X" or "Read this text"
-- Put the same text in both user and assistant
-- Create "read me this passage" → passage pairs (model learns to parrot, not converse)
-- Skip quality verification
-- Train on AI-generated responses without verification
+**Your dataset format matters more than its size.**
 
-### The Critical Lesson: Format Matters More Than Size
+We trained a model with 12,000 pairs in the wrong format — it invented words and couldn't hold a conversation. We then trained with 5,000 pairs in the right format — it responded correctly.
 
-A 12,000-pair dataset in the wrong format produces a model that invents words. A 5,000-pair dataset in the right format produces a model that responds correctly.
-
-**Wrong format** (model learns to recite):
+The wrong format:
 ```json
-{"user": "Read me paragraph 3 of chapter 1", "assistant": "The actual paragraph text..."}
+{"user": "Read me chapter 1", "assistant": "The text of chapter 1..."}
 ```
+The model learned: when someone says "read me X", recite X. It never learned to converse.
 
-**Right format** (model learns to converse):
+The right format:
 ```json
-{"user": "What happened when the princess looked at the sky?", "assistant": "The actual paragraph text..."}
+{"user": "What happened when the princess looked at the sky?", "assistant": "The text describing what happened..."}
 ```
+Same source material, same response — but the user prompt is a natural question. The model learns: when someone asks about X, respond with the relevant information.
 
-Same source material, same response — different user prompt. The model learns the pattern: when someone asks X, respond with Y.
+**Rules for good SFT data:**
+1. User prompts must be natural questions people would actually ask
+2. Never use "read me", "recite", "quote from" as user prompts
+3. Balance your dataset: ~40% conversation, ~40% knowledge/translation, ~20% corrections
+4. Every assistant response must be authentic — never invent content
+5. Deduplicate by assistant response content
+6. Manually verify a random sample before training
 
-## Known Issues & Fixes
+---
 
-### 1. GRPO Fails with "Can't convert LoRALinear to LoRA"
+## Configuration Reference
 
-**Problem:** GRPO tries to apply LoRA on top of an SFT adapter that already has LoRA layers.
+### CPT Config
 
-**Solution:** Fuse the SFT adapter into the base model before running GRPO:
+| Parameter | Value | Why |
+|---|---|---|
+| `learning_rate` | `5e-6` | Low — CPT only adapts, doesn't restructure |
+| `max_seq_length` | `1024` | Long chunks for reading comprehension |
+| `mask_prompt` | `false` | CPT trains on everything (no system/user distinction) |
+| `iters` | `1000-3000` | More isn't better — monitor val loss, stop when it rises |
+| `save_every` | `500` | Checkpoint frequently — CPT overfits fast |
 
+### SFT Config
+
+| Parameter | Value | Why |
+|---|---|---|
+| `learning_rate` | `1e-5` | Standard for SFT |
+| `max_seq_length` | `512` | Shorter — responses are usually < 256 tokens |
+| `mask_prompt` | `true` | Only train on assistant responses, not system/user |
+| `iters` | `dataset_size × epochs` | 10 epochs is a good default |
+| `save_every` | `5000` | Protect against OOM crashes |
+
+### GRPO Config
+
+| Parameter | Value | Why |
+|---|---|---|
+| `learning_rate` | `1e-6` | Very low — small adjustments only |
+| `n_candidates` | `4` | 4 candidates per prompt |
+| `n_iters` | `30` | 30 iterations with early stopping |
+| `enable_thinking` | `False` | Critical for Qwen3.5 — reward drops from 0.92 to 0.27 with thinking mode |
+
+---
+
+## Known Issues and Solutions
+
+### 1. GRPO crashes with "Can't convert LoRALinear to LoRA"
+
+**Why:** GRPO tries to add LoRA layers on top of an SFT model that already has LoRA layers. LoRA-on-LoRA is not supported.
+
+**Fix:** Fuse the SFT adapter into the base model first:
 ```bash
-# Fuse SFT adapter
 python -m mlx_lm fuse \
   --model models/your-base-model \
   --adapter-path adapters/stage2-sft \
-  --save-path models/fused-sft-model
-
-# Run GRPO on fused model (no adapter_path needed)
-# In grpo_train.py, set MODEL_PATH to the fused model
+  --save-path models/fused-sft
 ```
+Then point GRPO to `models/fused-sft` instead of the base model + adapter.
 
-### 2. Gemma 4 Won't Load in mlx-lm
+### 2. Gemma 4 won't load — "510 parameters not in model"
 
-**Problem:** Released mlx-lm versions (≤0.31.2) don't fully support Gemma 4's MoE architecture. You get "510 parameters not in model" error.
+**Why:** The released version of mlx-lm doesn't fully support Gemma 4's MoE architecture.
 
-**Solution:** Install mlx-lm from the main branch:
-
+**Fix:** Install from the main branch:
 ```bash
 pip install 'mlx-lm @ git+https://github.com/ml-explore/mlx-lm.git@main'
 ```
 
-### 3. OOM (Out of Memory) During Training
+### 3. Training crashes with OOM (Out of Memory)
 
-**Problem:** Training crashes after hours with "Insufficient Memory" error, losing all progress.
+**Why:** The model + training overhead exceeds your Mac's RAM. Often caused by running other GPU-heavy tasks in parallel.
 
-**Solution:**
-- Set `save_every: 5000` in config to checkpoint regularly
-- Don't run other GPU-intensive tasks during training (embedding models, scraping, etc.)
-- Reduce `max_seq_length` if needed (512 is enough for short responses)
-- Use `grad_checkpoint: true` to trade speed for memory
+**Fix:**
+- Set `save_every: 5000` to checkpoint regularly (don't lose hours of work)
+- Don't run embedding models or scraping during training
+- Reduce `max_seq_length` (512 → 256)
+- Use `grad_checkpoint: true`
+- Close other GPU-heavy apps
 
-### 4. CPT Overfitting
+### 4. CPT val loss rises after initial drop
 
-**Problem:** CPT val loss improves then starts rising (overfitting on small text corpus).
+**Why:** The model is overfitting on the small text corpus. Normal behavior.
 
-**Solution:** Monitor val loss every 500 iterations. Use the checkpoint with the lowest val loss, not the final one. Typical best checkpoint is at 500-1500 iterations.
+**Fix:** Don't use the final checkpoint. Use the one with the lowest val loss (usually iter 500-1500). Monitor with:
+```bash
+grep "Val loss" pipeline_log.txt
+```
 
-### 5. Resume Training After Crash
+### 5. Resuming after crash
 
-**Problem:** Training crashed and you want to resume from the last checkpoint.
+**Why:** Training crashed and you want to continue from the last checkpoint.
 
-**Solution:**
+**Fix:**
 ```bash
 python -m mlx_lm lora -c config_sft.yaml \
-  --resume-adapter-file adapters/stage2-sft/best_checkpoint.safetensors \
-  --iters REMAINING_ITERATIONS
+  --resume-adapter-file adapters/stage2-sft/CHECKPOINT.safetensors \
+  --iters REMAINING_ITERS
+```
+Note: Optimizer state is lost on resume. Val loss will temporarily spike before recovering.
+
+---
+
+## Understanding Training Metrics
+
+### Epochs
+An epoch means the model has seen your entire dataset once. If you have 10,000 training pairs and set 10 epochs, the model will see each pair 10 times — that's 100,000 iterations total.
+
+More epochs = the model memorizes better, but too many = **overfitting** (the model memorizes the training data perfectly but can't generalize to new questions).
+
+**Recommended:** 6-10 epochs for SFT. Monitor val loss to decide when to stop.
+
+### Train Loss
+This number tells you how well the model is learning the training data. **Lower is better.**
+
+- Starts high (3-7) and drops as the model learns
+- Should decrease steadily during training
+- If it stops decreasing, the model has learned what it can from the data
+
+### Val Loss (Validation Loss)
+This is the most important number. It tells you how well the model performs on data it has **never seen** during training. **Lower is better.**
+
+- Starts high, drops as the model learns to generalize
+- At some point it starts rising again — this means **overfitting** (the model is memorizing training data instead of learning general patterns)
+- **The checkpoint with the lowest val loss is the best model**
+
+### How checkpoint selection works
+
+mlx-lm automatically saves `adapters.safetensors` with the **best val loss** seen so far. It also saves numbered checkpoints (`0005000_adapters.safetensors`, `0010000_adapters.safetensors`, etc.) at regular intervals.
+
+When val loss is evaluated (every `steps_per_eval` iterations):
+- If the new val loss is lower than any previous → `adapters.safetensors` is updated (best model)
+- The numbered checkpoint is always saved regardless
+
+**You should always use `adapters.safetensors`** (the best) for the next stage, not the last numbered checkpoint.
+
+### Example training progression
+
+```
+Iter  1000: Train loss 3.20, Val loss 2.79  ← model is learning
+Iter  2000: Train loss 2.55, Val loss 2.66  ← still improving (val loss dropped)
+Iter  3000: Train loss 2.10, Val loss 2.90  ← val loss RISING → overfitting started
+                                              Best checkpoint: iter 2000 (val 2.66)
 ```
 
-Note: The optimizer state is not saved, so the model needs a few hundred iterations to "warm up" again. The val loss will be temporarily higher than the checkpoint's val loss.
+In this example, the best model is at iter 2000 even though training continued to iter 3000. The model at iter 3000 has a lower train loss (2.10) but higher val loss (2.90) — it memorized the training data but got worse at generalizing.
 
-## GRPO: Semantic Reward Optimization
+---
 
-GRPO uses a Generator-Evaluator architecture inspired by [Anthropic's harness design](https://www.anthropic.com/engineering/harness-design):
+## How it works (for the curious)
 
-```
-For each training prompt:
-  1. Generator: produce N candidate responses
-  2. Evaluator: score each candidate on semantic similarity,
-     response length, and brevity match
-  3. Reinforce: update weights to favor high-scoring candidates
-```
+### LoRA (Low-Rank Adaptation)
+Instead of updating all 26 billion parameters (which would need terabytes of memory), LoRA adds small trainable matrices to specific layers. Typically only 0.1-4% of parameters are trainable. This is why fine-tuning works on a Mac — you're only training ~100-200 million parameters.
 
-### GRPO Config
+### 4-bit Quantization
+Models are stored with 4 bits per parameter instead of 16 or 32. This reduces a 26B model from ~52 GB to ~15 GB, making it fit in Mac RAM. Quality loss is minimal for fine-tuning.
 
-```python
-CONFIG = {
-    "n_candidates": 4,       # Candidates per prompt
-    "max_tokens": 256,       # Max response length
-    "learning_rate": 1e-6,   # Very low LR for GRPO
-    "n_iters": 30,           # GRPO iterations
-    "lora_layers": 16,
-}
-```
+### Unified Memory
+On NVIDIA systems, the GPU has its own memory (VRAM). Data must be copied between CPU RAM and GPU VRAM — this is slow and limits model size to VRAM capacity. On Apple Silicon, CPU and GPU share the same memory pool. A 64GB Mac gives the GPU access to all 64GB. No copying, no VRAM limits.
 
-### Critical: Disable Thinking Mode
+### The Pipeline Logic
+1. **CPT** teaches vocabulary and patterns (like reading a textbook)
+2. **SFT** teaches behavior (like practicing Q&A with a tutor)
+3. **GRPO** optimizes quality (like getting graded on your answers and improving)
 
-For models with thinking mode (Qwen3.5, etc.), you MUST set `enable_thinking=False` in `apply_chat_template`. With thinking mode: reward ~0.27. Without: reward ~0.92.
+Each stage builds on the previous one. You can skip CPT if your domain is already well-represented in the base model (English, code, etc.). You can skip GRPO if SFT quality is sufficient. But the full pipeline gives the best results.
 
-## Full Pipeline Script
-
-```bash
-#!/bin/bash
-# run_pipeline.sh — Full CPT → SFT → GRPO pipeline
-
-set -e
-source venv/bin/activate
-
-echo "=== Stage 1: CPT ==="
-python -m mlx_lm lora -c config_cpt.yaml
-
-echo "=== Stage 2: SFT ==="
-python -m mlx_lm lora -c config_sft.yaml
-
-echo "=== Fuse SFT for GRPO ==="
-python -m mlx_lm fuse \
-  --model models/your-base-model \
-  --adapter-path adapters/stage2-sft \
-  --save-path models/fused-sft
-
-echo "=== Stage 3: GRPO ==="
-python grpo_train.py
-
-echo "=== Pipeline complete ==="
-```
-
-## Hardware Tested
-
-| Mac | RAM | Models Tested | Notes |
-|---|---|---|---|
-| Mac Mini M4 Pro | 64 GB | Qwen3.5-9B, Gemma 4 26B-A4B | Training ~0.5-0.6 it/sec |
-| MacBook Pro M3 Max | 48 GB | Qwen3.5-9B | Training ~0.4 it/sec |
-| Mac Studio M2 Ultra | 192 GB | Up to 70B models | Untested but should work |
+---
 
 ## Citation
-
-If you use this pipeline, please cite:
 
 ```bibtex
 @article{pappone2025grpo,
@@ -348,3 +361,8 @@ If you use this pipeline, please cite:
 ## License
 
 Apache 2.0
+
+## Authors
+
+- [onepixac](https://github.com/onepixac) — Architecture, implementation, and testing
+- [Claude Opus 4.6](https://anthropic.com) — Co-development and documentation
