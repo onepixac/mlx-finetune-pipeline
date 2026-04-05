@@ -1,5 +1,7 @@
 # MLX Fine-Tuning Pipeline
 
+> *"Sharing is knowledge, knowledge is sharing."*
+
 **Complete CPT → SFT → GRPO pipeline for fine-tuning language models on Apple Silicon.**
 
 Created by [onepixac](https://github.com/onepixac) with [Claude Opus 4.6](https://anthropic.com).
@@ -53,31 +55,38 @@ Where to find MLX models: **[mlx-community](https://huggingface.co/mlx-community
 
 ### Which model to choose?
 
-| Model | Parameters | 4-bit Size | Min RAM | Best for |
-|---|---|---|---|---|
-| [Gemma 4 E2B](https://huggingface.co/mlx-community/gemma-4-2b-a2b-it-4bit) | 2B | ~1.5 GB | 16 GB | Quick experiments |
-| [Qwen3.5-4B](https://huggingface.co/mlx-community/Qwen3.5-4B-MLX-4bit) | 4B | ~2.5 GB | 16 GB | Small tasks |
-| [Gemma 4 12B-A4B](https://huggingface.co/mlx-community/gemma-4-12b-a4b-it-4bit) | 4B active | ~7 GB | 24 GB | Good balance |
-| [Qwen3.5-9B](https://huggingface.co/mlx-community/Qwen3.5-9B-MLX-4bit) | 9B | ~5.6 GB | 24 GB | Strong all-rounder |
-| [Gemma 4 26B-A4B](https://huggingface.co/mlx-community/gemma-4-26b-a4b-it-4bit) | 4B active (26B total) | ~15.6 GB | 32 GB | Best quality per token |
-| [Qwen3.5-32B](https://huggingface.co/mlx-community/Qwen3.5-32B-MLX-4bit) | 32B | ~18 GB | 48 GB | Maximum quality |
-| [Llama 3.3-70B](https://huggingface.co/mlx-community/Llama-3.3-70B-Instruct-4bit) | 70B | ~40 GB | 64 GB | Frontier |
+Browse all available MLX models at **[mlx-community on HuggingFace](https://huggingface.co/mlx-community)**. Filter by size based on your Mac's RAM:
+
+| Your Mac RAM | Max model size (4-bit) | Example size range |
+|---|---|---|
+| 16 GB | ~3 GB | 1B-4B models |
+| 24 GB | ~8 GB | 4B-9B models |
+| 32 GB | ~16 GB | 9B-26B models |
+| 48 GB | ~25 GB | Up to 32B models |
+| 64 GB | ~40 GB | Up to 70B models |
+| 128-192 GB | ~100+ GB | Any model |
 
 **Rule of thumb:** Model size (4-bit) + 8 GB for training overhead = minimum RAM you need.
 
-**"Active" parameters:** Some models like Gemma 4 use Mixture of Experts (MoE). They have 26B total parameters but only 4B are active for each token. This means high quality with lower computation cost.
+**MoE (Mixture of Experts) models:** Some models have more total parameters but fewer "active" parameters per token. For example, a 26B model with 4B active parameters gives high quality with lower computation cost. Look for names containing "A4B", "A3B", etc.
+
+**How to search:** Go to [mlx-community](https://huggingface.co/mlx-community) and search for your preferred model family + "4bit". For example: "gemma 4bit", "llama 4bit", "mistral 4bit".
 
 ---
 
-## Hardware Tested
+## Hardware
 
-| Mac | RAM | Largest Model | Training Speed | Notes |
-|---|---|---|---|---|
-| Mac Mini M4 Pro | 64 GB | Gemma 4 26B-A4B | ~0.5 it/sec | Recommended setup |
-| MacBook Pro M3 Max | 48 GB | Qwen3.5-32B | ~0.4 it/sec | Works well |
-| Mac Studio M2 Ultra | 192 GB | 70B+ models | ~0.3 it/sec | Maximum capacity |
-| MacBook Air M2 | 24 GB | Qwen3.5-9B | ~0.2 it/sec | Possible but slow |
-| Any M1+ Mac | 16 GB | Gemma 4 E2B | ~0.3 it/sec | Minimum viable |
+Any Mac with Apple Silicon (M1 or later) works. More RAM = larger models.
+
+| Mac RAM | What you can fine-tune | Training Speed |
+|---|---|---|
+| 16 GB | Models up to ~4B | ~0.3 it/sec |
+| 24 GB | Models up to ~9B | ~0.3-0.5 it/sec |
+| 32-48 GB | Models up to ~26B | ~0.4-0.5 it/sec |
+| 64 GB | Models up to ~70B | ~0.5 it/sec |
+| 128-192 GB | Any model | ~0.3-0.5 it/sec |
+
+**Tested on:** Mac Mini M4 Pro with 64 GB unified memory.
 
 ---
 
@@ -219,7 +228,7 @@ Same source material, same response — but the user prompt is a natural questio
 | `learning_rate` | `1e-6` | Very low — small adjustments only |
 | `n_candidates` | `4` | 4 candidates per prompt |
 | `n_iters` | `30` | 30 iterations with early stopping |
-| `enable_thinking` | `False` | Critical for Qwen3.5 — reward drops from 0.92 to 0.27 with thinking mode |
+| `enable_thinking` | `False` | For models with thinking mode — reward drops significantly if left enabled |
 
 ---
 

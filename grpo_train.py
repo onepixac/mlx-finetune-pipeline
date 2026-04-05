@@ -91,7 +91,7 @@ def generate_response(model, tokenizer, system, prompt, max_tokens, temperature)
     ]
     text = tokenizer.apply_chat_template(
         messages, tokenize=False, add_generation_prompt=True,
-        enable_thinking=False
+        enable_thinking=False  # Disable thinking mode if supported (safe to keep for all models)
     )
     sampler = make_sampler(temp=temperature)
     return generate(model, tokenizer, prompt=text, max_tokens=max_tokens, sampler=sampler)
@@ -157,7 +157,7 @@ def run_grpo(config=None):
             ]
             prompt_text = tokenizer.apply_chat_template(
                 messages, tokenize=False, add_generation_prompt=True,
-                enable_thinking=False
+                enable_thinking=False  # Disable thinking mode if supported (safe to keep for all models)
             )
 
             candidates = []
